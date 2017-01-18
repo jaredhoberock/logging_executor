@@ -88,9 +88,28 @@ std::ostream& operator<<(std::ostream& os, const executor_operation& op)
 }
 
 
+// this function invokes logging_function.after(args...) if that expression is well-formed
+
+// well-formed case
+template<class LoggingFunction, class... Args>
+auto invoke_after_if(LoggingFunction& logging_function, Args&&... args) ->
+  decltype(logging_function.after(std::forward<Args>(args)...))
+{
+  return logging_function.after(std::forward<Args>(args)...);
+}
+
+// ill-formed case
+template<class... Args>
+void invoke_after_if(Args&&...)
+{
+  // do nothing
+}
+
+
 // logging_executor only has an executor operation member function if the base executor also has that function
 // because we only want to log native operations on the base executor
 // we might also want a version of this that has every member function so that we can trace the path through an adaptation
+// XXX should make .after() an optional member of LoggingFunction
 template<class Executor, class LoggingFunction>
 struct logging_executor
 {
@@ -104,6 +123,8 @@ struct logging_executor
   using future = agency::executor_future_t<base_executor_type,T>;
 
   base_executor_type base_executor_;
+
+  // XXX consider passing the result of before_(...) as a parameter to after_(...)
   LoggingFunction logging_function_;
 
   logging_executor(const Executor& exec, LoggingFunction logging_function = LoggingFunction())
@@ -127,7 +148,11 @@ struct logging_executor
   {
     logging_function_(base_executor_, executor_operation::async_execute);
 
-    return base_executor_.async_execute(std::forward<Function>(f));
+    auto result = base_executor_.async_execute(std::forward<Function>(f));
+
+    invoke_after_if(logging_function_, base_executor_, executor_operation::async_execute);
+
+    return std::move(result);
   }
 
   template<class Function, class ResultFactory, class... Factories,
@@ -138,7 +163,11 @@ struct logging_executor
   {
     logging_function_(base_executor_, executor_operation::bulk_async_execute);
 
-    return base_executor_.bulk_async_execute(f, shape, result_factory, shared_factories...);
+    auto result = base_executor_.bulk_async_execute(f, shape, result_factory, shared_factories...);
+
+    invoke_after_if(logging_function_, base_executor_, executor_operation::bulk_async_execute);
+
+    return std::move(result);
   }
 
   template<class Function, class ResultFactory, class... Factories,
@@ -149,7 +178,11 @@ struct logging_executor
   {
     logging_function_(base_executor_, executor_operation::bulk_sync_execute);
 
-    return base_executor_.bulk_sync_execute(f, shape, result_factory, shared_factories...);
+    auto result = base_executor_.bulk_sync_execute(f, shape, result_factory, shared_factories...);
+
+    invoke_after_if(logging_function_, base_executor_, executor_operation::bulk_sync_execute);
+
+    return std::move(result);
   }
 
   template<class Function, class Future, class ResultFactory, class... Factories,
@@ -160,7 +193,11 @@ struct logging_executor
   {
     logging_function_(base_executor_, executor_operation::bulk_then_execute);
 
-    return base_executor_.bulk_then_execute(f, shape, predecessor, result_factory, shared_factories...);
+    auto result = base_executor_.bulk_then_execute(f, shape, predecessor, result_factory, shared_factories...);
+
+    invoke_after_if(logging_function_, base_executor_, executor_operation::bulk_then_execute);
+
+    return std::move(result);
   }
 
   template<class T, class Future,
@@ -170,7 +207,11 @@ struct logging_executor
   {
     logging_function_(base_executor_, executor_operation::future_cast);
 
-    return base_executor_.template future_cast<T>(fut);
+    auto result = base_executor_.template future_cast<T>(fut);
+
+    invoke_after_if(logging_function_, base_executor_, executor_operation::future_cast);
+
+    return std::move(result);
   }
 
   template<class T, class... Args,
@@ -180,7 +221,11 @@ struct logging_executor
   {
     logging_function_(base_executor_, executor_operation::make_ready_future);
 
-    return base_executor_.template make_ready_future<T>(std::forward<Args>(args)...);
+    auto result = base_executor_.template make_ready_future<T>(std::forward<Args>(args)...);
+
+    invoke_after_if(logging_function_, base_executor_, executor_operation::make_ready_future);
+
+    return std::move(result);
   }
 
   template<class BaseExecutor = base_executor_type,
@@ -189,7 +234,11 @@ struct logging_executor
   {
     logging_function_(base_executor_, executor_operation::max_shape_dimensions);
 
-    return base_executor_.max_shape_dimensions();
+    auto result = base_executor_.max_shape_dimensions();
+
+    invoke_after_if(logging_function_, base_executor_, executor_operation::max_shape_dimensions);
+
+    return std::move(result);
   }
 
   template<class Function,
@@ -200,7 +249,11 @@ struct logging_executor
   {
     logging_function_(base_executor_, executor_operation::sync_execute);
 
-    return base_executor_.sync_execute(std::forward<Function>(f));
+    auto result = base_executor_.sync_execute(std::forward<Function>(f));
+
+    invoke_after_if(logging_function_, base_executor_, executor_operation::sync_execute);
+
+    return std::move(result);
   }
 
   template<class Function, class Future,
@@ -211,7 +264,11 @@ struct logging_executor
   {
     logging_function_(base_executor_, executor_operation::then_execute);
 
-    return base_executor_.then_execute(std::forward<Function>(f), predecessor);
+    auto result = base_executor_.then_execute(std::forward<Function>(f), predecessor);
+
+    invoke_after_if(logging_function_, base_executor_, executor_operation::then_execute);
+
+    return std::move(result);
   }
 
   template<class BaseExecutor = base_executor_type,
@@ -220,7 +277,11 @@ struct logging_executor
   {
     logging_function_(base_executor_, executor_operation::unit_shape);
 
-    return base_executor_.unit_shape();
+    auto result = base_executor_.unit_shape();
+
+    invoke_after_if(logging_function_, base_executor_, executor_operation::unit_shape);
+
+    return std::move(result);
   }
 };
 
