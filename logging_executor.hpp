@@ -19,72 +19,108 @@ enum class executor_operation
   unit_shape
 };
 
-std::ostream& operator<<(std::ostream& os, const executor_operation& op)
+enum class algorithm
 {
+  async_copy
+};
+
+std::string to_string(const executor_operation& op)
+{
+  std::string result;
+
   switch(op)
   {
     case executor_operation::async_execute:
     {
-      os << "async_execute";
+      result = "async_execute";
       break;
     }
 
     case executor_operation::bulk_async_execute:
     {
-      os << "bulk_async_execute";
+      result = "bulk_async_execute";
       break;
     }
 
     case executor_operation::bulk_sync_execute:
     {
-      os << "bulk_sync_execute";
+      result = "bulk_sync_execute";
       break;
     }
 
     case executor_operation::bulk_then_execute:
     {
-      os << "bulk_then_execute";
+      result = "bulk_then_execute";
       break;
     }
 
     case executor_operation::future_cast:
     {
-      os << "future_cast";
+      result = "future_cast";
       break;
     }
 
     case executor_operation::make_ready_future:
     {
-      os << "make_ready_future";
+      result = "make_ready_future";
       break;
     }
 
     case executor_operation::max_shape_dimensions:
     {
-      os << "max_shape_dimensions";
+      result = "max_shape_dimensions";
       break;
     }
 
     case executor_operation::sync_execute:
     {
-      os << "sync_execute";
+      result = "sync_execute";
       break;
     }
 
     case executor_operation::then_execute:
     {
-      os << "then_execute";
+      result = "then_execute";
       break;
     }
 
     case executor_operation::unit_shape:
     {
-      os << "unit_shape";
+      result = "unit_shape";
       break;
     }
   }
 
-  return os;
+  return result;
+}
+
+
+std::ostream& operator<<(std::ostream& os, const executor_operation& op)
+{
+  return os << to_string(op);
+}
+
+
+std::string to_string(const algorithm& op)
+{
+  std::string result;
+
+  switch(op)
+  {
+    case algorithm::async_copy:
+    {
+      result = "async_copy";
+      break;
+    }
+  }
+
+  return result;
+}
+
+
+std::ostream& operator<<(std::ostream& os, const algorithm& alg)
+{
+  return os << to_string(alg);
 }
 
 
@@ -127,14 +163,35 @@ struct logging_executor
   // XXX consider passing the result of before_(...) as a parameter to after_(...)
   LoggingFunction logging_function_;
 
-  logging_executor(const Executor& exec, LoggingFunction logging_function = LoggingFunction())
+  __agency_exec_check_disable__
+  __AGENCY_ANNOTATION
+  logging_executor(const Executor& exec = Executor(), LoggingFunction logging_function = LoggingFunction())
     : base_executor_(exec),
       logging_function_(logging_function)
   {}
 
+  __agency_exec_check_disable__
+  __AGENCY_ANNOTATION
+  logging_executor(const logging_executor& other)
+    : logging_executor(other.base_executor(), other.logging_function())
+  {}
+
+  __AGENCY_ANNOTATION
   const base_executor_type& base_executor() const
   {
     return base_executor_;
+  }
+
+  __AGENCY_ANNOTATION
+  LoggingFunction& logging_function()
+  {
+    return logging_function_;
+  }
+
+  __AGENCY_ANNOTATION
+  const LoggingFunction& logging_function() const
+  {
+    return logging_function_;
   }
 
   // Note the purpose of the BaseExecutor = base_executor_type stuff
