@@ -86,21 +86,6 @@ class annotator
       ascend();
     }
 
-    const std::string& name() const
-    {
-      return name_;
-    }
-
-    ::color color() const
-    {
-      return color_;
-    }
-
-    size_t recursion_depth() const
-    {
-      return recursion_depth_;
-    }
-
     void descend()
     {
       ++recursion_depth_;
@@ -109,6 +94,11 @@ class annotator
     void ascend()
     {
       --recursion_depth_;
+    }
+
+    annotator new_descend() const
+    {
+      return annotator(name_, color_, recursion_depth_ + 1);
     }
 
     template<class Executor>
@@ -196,25 +186,25 @@ class annotating_execution_policy :
     {
       private:
         ::annotator annotator_;
-        annotating_execution_policy self_;
+        ExecutionPolicy policy_;
         Token token_;
 
       public:
-        annotated_scope(annotating_execution_policy& self, Token token)
-          : annotator_(self.annotator()), self_(self), token_(token)
+        annotated_scope(annotating_execution_policy& annotated_policy, Token token)
+          : annotator_(annotated_policy.annotator()), policy_(annotated_policy.base_execution_policy()), token_(token)
         {
           // update the recursion depth of the annotator
           // XXX should really happen inside the annotator's constructor somehow
           //annotator_.descend();
 
           // invoke the annotator
-          annotator_(self_, token_);
+          annotator_(policy_, token_);
         }
 
         ~annotated_scope()
         {
           // invoke the annotator's .after() method
-          annotator_.after(self_, token_);
+          annotator_.after(policy_, token_);
         }
     };
 
