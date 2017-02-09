@@ -26,7 +26,7 @@ class annotator
     color color_;
     size_t depth_;
 
-    static void nvtx_range_push_ex(const std::string& message, const color& c)
+    inline static void nvtx_range_push_ex(const std::string& message, const color& c)
     {
       nvtxEventAttributes_t eventAttrib = {0};
       eventAttrib.version = NVTX_VERSION;
@@ -38,54 +38,57 @@ class annotator
       nvtxRangePushEx(&eventAttrib);
     }
 
-    static void nvtx_range_pop()
+    inline static void nvtx_range_pop()
     {
       nvtxRangePop();
     }
 
-    void mark_executor_operation(executor_operation which) const
+    inline void mark_executor_operation(executor_operation which) const
     {
-      std::string message = indentation() + to_string(which);
+      std::string indentation = std::string().insert(0, 2 * depth_, ' ');
+
+      std::string message = indentation + to_string(which);
       std::cout << message << std::endl;
 
       std::string mark = name_ + ": " + to_string(which);
       nvtx_range_push_ex(mark, color_);
     }
 
-    void mark_control_structure(control_structure which) const
+    inline void mark_control_structure(control_structure which) const
     {
-      std::string message = indentation() + to_string(which);
+      std::string indentation = std::string().insert(0, 2 * depth_, ' ');
+
+      std::string message = indentation + to_string(which);
       std::cout << message << std::endl;
 
       std::string mark = name_ + ": " + to_string(which);
       nvtx_range_push_ex(mark, color_);
     }
     
-    annotator(const std::string& name, color c, size_t depth)
+    inline annotator(const std::string& name, color c, size_t depth)
       : name_(name), color_(c), depth_(depth)
     {}
 
   public:
-    annotator(const std::string& name = std::string(), color c = green)
+    inline annotator(const std::string& name = std::string(), color c = green)
       : annotator(name, c, 0)
     {}
 
     // define copy constructor to silence __host__ __device__ warnings
-    annotator(const annotator&) = default;
+    inline annotator(const annotator&) = default;
 
     // define destructor to silence __host__ __device__ warnings
-    ~annotator() = default;
+    inline ~annotator() = default;
 
     // constructs a new annotator at one recursion level "below" this annotator
-    annotator descend() const
+    inline annotator descend() const
     {
       return annotator(name_, color_, depth_ + 1);
     }
 
-    // XXX should eliminate this method and just expose .recursion_depth() or .depth()
-    std::string indentation() const
+    inline size_t depth() const
     {
-      return std::string().insert(0, 2 * depth_, ' ');
+      return depth_;
     }
 
     template<class Executor>
@@ -230,7 +233,8 @@ annotating_execution_policy<ExecutionPolicy> annotate(const ExecutionPolicy& pol
   annotator ann(name, c);
 
   // "announce" the annotation
-  std::string announcement = ann.indentation() + name;
+  std::string indentation = std::string().insert(0, 2 * ann.depth(), ' ');
+  std::string announcement = indentation + name;
 
   std::cout << announcement << std::endl;
 
