@@ -38,7 +38,7 @@
 
 void init_host_data( int n, double * x )
 {
-  annotator("init_host_data", blue);
+  auto policy = annotate(agency::cuda::par, "init_host_data", blue);
 
   for(int i=0; i<n; ++i)
   {
@@ -90,7 +90,7 @@ void check_results(int n, double correctvalue, double* x_d)
 void run_test(int n)
 {
   {
-    annotator("run_test", green);
+    auto policy = annotate(agency::cuda::par, "run_test", green);
 
     double* x_d;
     double* y_d;
