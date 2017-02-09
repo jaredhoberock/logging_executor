@@ -50,9 +50,9 @@ void init_data(int n, double* x, double* x_d, double* y_d)
 {
   auto policy = annotate(agency::cuda::par, "init_data", yellow);
 
-  auto copy_finished = experimental::async_copy(policy, x, x + n, x_d);
+  agency::cuda::future<void> copy_finished = experimental::async_copy(policy, x, x + n, x_d);
 
-  auto init_finished = experimental::bulk_async(policy(n), [=] __device__ (agency::parallel_agent& self)
+  agency::cuda::future<void> init_finished = experimental::bulk_async(policy(n), [=] __device__ (agency::parallel_agent& self)
   {
     y_d[self.index()] = n - self.index();
   });
