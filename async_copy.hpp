@@ -37,7 +37,7 @@ agency::cuda::async_future<void> async_copy_default_implementation(ExecutionPoli
 
 
 template<class ExecutionPolicy, class... Args>
-struct has_adl_async_copy_impl
+struct can_adl_async_copy_impl
 {
   template<class ExecutionPolicy1,
            class = decltype(
@@ -52,7 +52,7 @@ struct has_adl_async_copy_impl
 };
 
 template<class ExecutionPolicy, class... Args>
-using has_adl_async_copy = typename has_adl_async_copy_impl<ExecutionPolicy,Args...>::type;
+using can_adl_async_copy = typename can_adl_async_copy_impl<ExecutionPolicy,Args...>::type;
 
 
 } // end detail
@@ -60,7 +60,7 @@ using has_adl_async_copy = typename has_adl_async_copy_impl<ExecutionPolicy,Args
 
 template<class ExecutionPolicy, class... Args,
          __AGENCY_REQUIRES(
-           detail::has_adl_async_copy<ExecutionPolicy,Args...>::value
+           detail::can_adl_async_copy<ExecutionPolicy,Args...>::value
          )>
 auto async_copy(ExecutionPolicy&& policy, Args&&... args) ->
   decltype(detail::async_copy_adl_implementation(std::forward<ExecutionPolicy>(policy), std::forward<Args>(args)...))
@@ -71,7 +71,7 @@ auto async_copy(ExecutionPolicy&& policy, Args&&... args) ->
 
 template<class ExecutionPolicy, class... Args,
          __AGENCY_REQUIRES(
-           !detail::has_adl_async_copy<ExecutionPolicy,Args...>::value
+           !detail::can_adl_async_copy<ExecutionPolicy,Args...>::value
          )>
 auto async_copy(ExecutionPolicy&& policy, Args&&... args) ->
   decltype(detail::async_copy_default_implementation(std::forward<ExecutionPolicy>(policy), std::forward<Args>(args)...))

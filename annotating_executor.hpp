@@ -2,6 +2,8 @@
 
 #include "logging_executor.hpp"
 #include "async_copy.hpp"
+#include "bulk_async.hpp"
+#include "bulk_invoke.hpp"
 #include <agency/cuda.hpp>
 #include <string>
 
@@ -50,7 +52,7 @@ class annotator
       nvtx_range_push_ex(mark, color_);
     }
 
-    void mark_algorithm(algorithm which) const
+    void mark_control_structure(control_structure which) const
     {
       std::string message = indent() + to_string(which);
       std::cout << message << std::endl;
@@ -84,6 +86,21 @@ class annotator
       ascend();
     }
 
+    const std::string& name() const
+    {
+      return name_;
+    }
+
+    ::color color() const
+    {
+      return color_;
+    }
+
+    size_t recursion_depth() const
+    {
+      return recursion_depth_;
+    }
+
     void descend()
     {
       ++recursion_depth_;
@@ -101,9 +118,9 @@ class annotator
     }
 
     template<class ExecutionPolicy>
-    void operator()(const ExecutionPolicy&, algorithm which) const
+    void operator()(const ExecutionPolicy&, control_structure which) const
     {
-      mark_algorithm(which);
+      mark_control_structure(which);
     }
 
     template<class Executor>
@@ -113,7 +130,7 @@ class annotator
     }
 
     template<class ExecutionPolicy>
-    void after(const ExecutionPolicy&, algorithm which) const
+    void after(const ExecutionPolicy&, control_structure which) const
     {
       nvtx_range_pop();
     }
@@ -171,6 +188,41 @@ class annotating_execution_policy :
     {
       return this->executor().logging_function();
     }
+
+    // this class invokes the annotator in its constructor
+    // and its destructor with the given token
+    template<class Token>
+    class annotated_scope
+    {
+      private:
+        ::annotator annotator_;
+        annotating_execution_policy self_;
+        Token token_;
+
+      public:
+        annotated_scope(annotating_execution_policy& self, Token token)
+          : annotator_(self.annotator()), self_(self), token_(token)
+        {
+          // update the recursion depth of the annotator
+          // XXX should really happen inside the annotator's constructor somehow
+          //annotator_.descend();
+
+          // invoke the annotator
+          annotator_(self_, token_);
+        }
+
+        ~annotated_scope()
+        {
+          // invoke the annotator's .after() method
+          annotator_.after(self_, token_);
+        }
+    };
+
+    template<class Token>
+    annotated_scope<Token> annotate_scope(Token token)
+    {
+      return annotated_scope<Token>(*this, token);
+    }
 };
 
 
@@ -189,20 +241,94 @@ template<class ExecutionPolicy, class... Args>
 auto async_copy(annotating_execution_policy<ExecutionPolicy>& policy, Args&&... args) ->
   decltype(experimental::async_copy(policy.base_execution_policy(), std::forward<Args>(args)...))
 {
-  // mark the beginning of this async_copy()
-  policy.annotator()(policy, algorithm::async_copy);
+  // get the fancy annotating executor out of the policy
+  auto annotating_executor = policy.executor();
 
-  policy.annotator().descend();
+  // increment the annotating executor's recursion depth
+  annotating_executor.logging_function().descend();
 
-  // call async_copy() with the underlying execution policy
-  auto result = experimental::async_copy(policy.base_execution_policy(), std::forward<Args>(args)...);
+  // unwrap the annotating execution policy and bind it to the annotating_executor
+  // to ensure that executor operations still receive annotations
+  auto unwrapped_policy = policy.base_execution_policy().on(annotating_executor);
 
-  policy.annotator().ascend();
+  // annotate this scope
+  auto scope = policy.annotate_scope(control_structure::async_copy);
 
-  // mark the end of this async_copy()
-  invoke_after_if(policy.annotator(), policy, algorithm::async_copy);
+  // call async_copy with the unwrapped policy
+  // this will call the normal, unannotated version of async_copy
+  // when async_copy uses executor operations, they will be annotated because the fancy annotated_executor
+  // will be used
+  return experimental::async_copy(unwrapped_policy, std::forward<Args>(args)...);
+}
 
-  // return the result of the async_copy()
-  return std::move(result);
+
+template<class ExecutionPolicy, class Function, class... Args>
+auto bulk_async(annotating_execution_policy<ExecutionPolicy>& policy, Function f, Args&&... args) ->
+  decltype(experimental::bulk_async(policy.base_execution_policy(), f, std::forward<Args>(args)...))
+{
+  // get the fancy annotating executor out of the policy
+  auto annotating_executor = policy.executor();
+
+  // increment the annotating executor's recursion depth
+  annotating_executor.logging_function().descend();
+
+  // unwrap the annotating execution policy and bind it to the annotating_executor
+  // to ensure that executor operations still receive annotations
+  auto unwrapped_policy = policy.base_execution_policy().on(annotating_executor);
+
+  // annotate this scope
+  auto scope = policy.annotate_scope(control_structure::bulk_invoke);
+
+  // call bulk_async with the unwrapped policy
+  // this will call the normal, unannotated version of bulk_async
+  // when bulk_async uses executor operations, they will be annotated because the fancy annotated_executor
+  // will be used
+  return experimental::bulk_async(unwrapped_policy, f, std::forward<Args>(args)...);
+}
+
+
+template<class ExecutionPolicy, class Function, class... Args>
+auto bulk_async(annotating_execution_policy<ExecutionPolicy>&& policy, Function f, Args&&... args) ->
+  decltype(agency::bulk_async(policy.base_execution_policy(), f, std::forward<Args>(args)...))
+{
+  return ::bulk_async(policy, f, std::forward<Args>(args)...);
+}
+
+
+template<class ExecutionPolicy, class Function, class... Args>
+auto bulk_invoke(annotating_execution_policy<ExecutionPolicy>& policy, Function f, Args&&... args) ->
+  decltype(agency::bulk_invoke(policy.base_execution_policy(), f, std::forward<Args>(args)...))
+{
+  //// annotate this scope
+  //auto scope = policy.annotate_scope(control_structure::bulk_invoke);
+
+  //// call bulk_invoke() with the annotated scope's policy
+  //return experimental::bulk_invoke(scope.policy(), f, std::forward<Args>(args)...);
+
+  // get the fancy annotating executor out of the policy
+  auto annotating_executor = policy.executor();
+
+  // increment the annotating executor's recursion depth
+  annotating_executor.logging_function().descend();
+
+  // unwrap the annotating execution policy and bind it to the annotating_executor
+  // to ensure that executor operations still receive annotations
+  auto unwrapped_policy = policy.base_execution_policy().on(annotating_executor);
+
+  // annotate this scope
+  auto scope = policy.annotate_scope(control_structure::bulk_invoke);
+
+  // call bulk_async with the unwrapped policy
+  // this will call the normal, unannotated version of bulk_async
+  // when bulk_async uses executor operations, they will be annotated because the fancy annotated_executor
+  // will be used
+  return experimental::bulk_invoke(unwrapped_policy, f, std::forward<Args>(args)...);
+}
+
+template<class ExecutionPolicy, class Function, class... Args>
+auto bulk_invoke(annotating_execution_policy<ExecutionPolicy>&& policy, Function f, Args&&... args) ->
+  decltype(agency::bulk_invoke(policy.base_execution_policy(), f, std::forward<Args>(args)...))
+{
+  return ::bulk_invoke(policy, f, std::forward<Args>(args)...);
 }
 

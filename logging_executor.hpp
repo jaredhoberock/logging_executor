@@ -19,9 +19,11 @@ enum class executor_operation
   unit_shape
 };
 
-enum class algorithm
+enum class control_structure
 {
-  async_copy
+  async_copy,
+  bulk_async,
+  bulk_invoke
 };
 
 std::string to_string(const executor_operation& op)
@@ -101,15 +103,27 @@ std::ostream& operator<<(std::ostream& os, const executor_operation& op)
 }
 
 
-std::string to_string(const algorithm& op)
+std::string to_string(const control_structure& op)
 {
   std::string result;
 
   switch(op)
   {
-    case algorithm::async_copy:
+    case control_structure::async_copy:
     {
       result = "async_copy";
+      break;
+    }
+
+    case control_structure::bulk_async:
+    {
+      result = "bulk_async";
+      break;
+    }
+
+    case control_structure::bulk_invoke:
+    {
+      result = "bulk_invoke";
       break;
     }
   }
@@ -118,9 +132,9 @@ std::string to_string(const algorithm& op)
 }
 
 
-std::ostream& operator<<(std::ostream& os, const algorithm& alg)
+std::ostream& operator<<(std::ostream& os, const control_structure& cs)
 {
-  return os << to_string(alg);
+  return os << to_string(cs);
 }
 
 

@@ -27,11 +27,14 @@
 
 #include <cstdio>
 #include <iostream>
+
 #include <agency/agency.hpp>
 #include <agency/cuda.hpp>
 
 #include "annotating_executor.hpp"
 #include "async_copy.hpp"
+#include "bulk_invoke.hpp"
+#include "bulk_async.hpp"
 
 void init_host_data( int n, double * x )
 {
@@ -49,7 +52,7 @@ void init_data(int n, double* x, double* x_d, double* y_d)
 
   auto copy_finished = experimental::async_copy(policy, x, x + n, x_d);
 
-  auto init_finished = agency::bulk_async(policy(n), [=] __device__ (agency::parallel_agent& self)
+  auto init_finished = experimental::bulk_async(policy(n), [=] __device__ (agency::parallel_agent& self)
   {
     y_d[self.index()] = n - self.index();
   });
@@ -62,7 +65,7 @@ void daxpy(int n, double a, double* x, double* y)
 {
   auto policy = annotate(agency::cuda::par, "daxpy", magenta);
 
-  agency::bulk_invoke(policy(n), [=] __device__ (agency::parallel_agent& self)
+  experimental::bulk_invoke(policy(n), [=] __device__ (agency::parallel_agent& self)
   {
     int i = self.index();
     y[i] = a*x[i] + y[i];
@@ -73,7 +76,7 @@ void check_results(int n, double correctvalue, double* x_d)
 {
   auto policy = annotate(agency::cuda::par, "check_results", cyan);
 
-  agency::bulk_invoke(policy(n), [=] __device__ (agency::parallel_agent& self)
+  experimental::bulk_invoke(policy(n), [=] __device__ (agency::parallel_agent& self)
   {
     int i = self.index();
 
