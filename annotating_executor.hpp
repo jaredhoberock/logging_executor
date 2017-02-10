@@ -43,27 +43,18 @@ class annotator
       nvtxRangePop();
     }
 
-    inline void mark_executor_operation(executor_operation which) const
+    template<class Token>
+    inline void annotate(const Token& t) const
     {
       std::string indentation = std::string().insert(0, 2 * depth_, ' ');
 
-      std::string message = indentation + to_string(which);
+      std::string message = indentation + to_string(t);
       std::cout << message << std::endl;
 
-      std::string mark = name_ + ": " + to_string(which);
+      std::string mark = name_ + ": " + to_string(t);
       nvtx_range_push_ex(mark, color_);
     }
 
-    inline void mark_control_structure(control_structure which) const
-    {
-      std::string indentation = std::string().insert(0, 2 * depth_, ' ');
-
-      std::string message = indentation + to_string(which);
-      std::cout << message << std::endl;
-
-      std::string mark = name_ + ": " + to_string(which);
-      nvtx_range_push_ex(mark, color_);
-    }
     
     inline annotator(const std::string& name, color c, size_t depth)
       : name_(name), color_(c), depth_(depth)
@@ -94,13 +85,13 @@ class annotator
     template<class Executor>
     void operator()(const Executor&, executor_operation which) const
     {
-      mark_executor_operation(which);
+      annotate(which);
     }
 
     template<class ExecutionPolicy>
     void operator()(const ExecutionPolicy&, control_structure which) const
     {
-      mark_control_structure(which);
+      annotate(which);
     }
 
     template<class Executor>

@@ -26,6 +26,11 @@ enum class control_structure
   bulk_invoke
 };
 
+const std::string& to_string(const std::string& s)
+{
+  return s;
+}
+
 std::string to_string(const executor_operation& op)
 {
   std::string result;
