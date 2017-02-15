@@ -21,9 +21,12 @@ enum class executor_operation
 
 enum class control_structure
 {
-  async_copy,
-  bulk_async,
-  bulk_invoke
+  async_copy  = 0b001,
+  bulk_async  = 0b010,
+  bulk_invoke = 0b011,
+  for_each    = 0b100,
+
+  everything  = 0b111111111111
 };
 
 const std::string& to_string(const std::string& s)
@@ -129,6 +132,12 @@ std::string to_string(const control_structure& op)
     case control_structure::bulk_invoke:
     {
       result = "bulk_invoke";
+      break;
+    }
+
+    case control_structure::for_each:
+    {
+      result = "for_each";
       break;
     }
   }
@@ -360,6 +369,7 @@ struct logging_executor
     return std::move(result);
   }
 };
+
 
 template<class Executor, class LoggingFunction>
 logging_executor<Executor,LoggingFunction> make_logging_executor(const Executor& exec, LoggingFunction logging_function)

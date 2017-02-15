@@ -13,7 +13,7 @@ namespace detail
 // this is the implementation of async_copy() which simply calls
 // async_copy() via ADL
 template<class ExecutionPolicy, class... Args>
-auto async_copy_adl_implementation(ExecutionPolicy&& policy, Args&&... args) ->
+auto adl_async_copy(ExecutionPolicy&& policy, Args&&... args) ->
   decltype(async_copy(std::forward<ExecutionPolicy>(policy), std::forward<Args>(args)...))
 {
   return async_copy(std::forward<ExecutionPolicy>(policy), std::forward<Args>(args)...);
@@ -22,7 +22,7 @@ auto async_copy_adl_implementation(ExecutionPolicy&& policy, Args&&... args) ->
 
 // this is the default implementation of async_copy()
 template<class ExecutionPolicy, class T>
-agency::cuda::async_future<void> async_copy_default_implementation(ExecutionPolicy&& policy, const T* first, const T* last, T* result)
+agency::cuda::async_future<void> default_async_copy(ExecutionPolicy&& policy, const T* first, const T* last, T* result)
 {
   // create a stream for the copy
   // XXX should reach into policy's executor for its device_id or a ready future, preferably
@@ -37,7 +37,7 @@ agency::cuda::async_future<void> async_copy_default_implementation(ExecutionPoli
 
 
 template<class ExecutionPolicy, class... Args>
-struct can_adl_async_copy_impl
+struct has_async_copy_free_function_impl
 {
   template<class ExecutionPolicy1,
            class = decltype(
@@ -51,32 +51,33 @@ struct can_adl_async_copy_impl
   using type = decltype(test<ExecutionPolicy>(0));
 };
 
-template<class ExecutionPolicy, class... Args>
-using can_adl_async_copy = typename can_adl_async_copy_impl<ExecutionPolicy,Args...>::type;
-
 
 } // end detail
 
 
+template<class ExecutionPolicy, class... Args>
+using has_async_copy_free_function = typename detail::has_async_copy_free_function_impl<ExecutionPolicy,Args...>::type;
+
+
 template<class ExecutionPolicy, class... Args,
          __AGENCY_REQUIRES(
-           detail::can_adl_async_copy<ExecutionPolicy,Args...>::value
+           has_async_copy_free_function<ExecutionPolicy,Args...>::value
          )>
 auto async_copy(ExecutionPolicy&& policy, Args&&... args) ->
-  decltype(detail::async_copy_adl_implementation(std::forward<ExecutionPolicy>(policy), std::forward<Args>(args)...))
+  decltype(detail::adl_async_copy(std::forward<ExecutionPolicy>(policy), std::forward<Args>(args)...))
 {
-  return detail::async_copy_adl_implementation(std::forward<ExecutionPolicy>(policy), std::forward<Args>(args)...);
+  return detail::adl_async_copy(std::forward<ExecutionPolicy>(policy), std::forward<Args>(args)...);
 } // end async_copy()
 
 
 template<class ExecutionPolicy, class... Args,
          __AGENCY_REQUIRES(
-           !detail::can_adl_async_copy<ExecutionPolicy,Args...>::value
+           !has_async_copy_free_function<ExecutionPolicy,Args...>::value
          )>
 auto async_copy(ExecutionPolicy&& policy, Args&&... args) ->
-  decltype(detail::async_copy_default_implementation(std::forward<ExecutionPolicy>(policy), std::forward<Args>(args)...))
+  decltype(detail::default_async_copy(std::forward<ExecutionPolicy>(policy), std::forward<Args>(args)...))
 {
-  return detail::async_copy_default_implementation(std::forward<ExecutionPolicy>(policy), std::forward<Args>(args)...);
+  return detail::default_async_copy(std::forward<ExecutionPolicy>(policy), std::forward<Args>(args)...);
 } // end async_copy()
 
 

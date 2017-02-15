@@ -11,7 +11,7 @@ namespace detail
 // this is the implementation of bulk_async() which simply calls
 // bulk_async() via ADL
 template<class ExecutionPolicy, class... Args>
-auto bulk_async_adl_implementation(ExecutionPolicy&& policy, Args&&... args) ->
+auto adl_bulk_async(ExecutionPolicy&& policy, Args&&... args) ->
   decltype(bulk_async(std::forward<ExecutionPolicy>(policy), std::forward<Args>(args)...))
 {
   return bulk_async(std::forward<ExecutionPolicy>(policy), std::forward<Args>(args)...);
@@ -21,7 +21,7 @@ auto bulk_async_adl_implementation(ExecutionPolicy&& policy, Args&&... args) ->
 // this is the default implementation of bulk_async() which simply calls
 // agency::bulk_async()
 template<class ExecutionPolicy, class... Args>
-auto bulk_async_default_implementation(ExecutionPolicy&& policy, Args&&... args) ->
+auto default_bulk_async(ExecutionPolicy&& policy, Args&&... args) ->
   decltype(agency::bulk_async(std::forward<ExecutionPolicy>(policy), std::forward<Args>(args)...))
 {
   return agency::bulk_async(std::forward<ExecutionPolicy>(policy), std::forward<Args>(args)...);
@@ -29,7 +29,7 @@ auto bulk_async_default_implementation(ExecutionPolicy&& policy, Args&&... args)
 
 
 template<class ExecutionPolicy, class... Args>
-struct can_adl_bulk_async_impl
+struct has_bulk_async_free_function_impl
 {
   template<class ExecutionPolicy1,
            class = decltype(
@@ -43,32 +43,33 @@ struct can_adl_bulk_async_impl
   using type = decltype(test<ExecutionPolicy>(0));
 };
 
-template<class ExecutionPolicy, class... Args>
-using can_adl_bulk_async = typename can_adl_bulk_async_impl<ExecutionPolicy,Args...>::type;
-
 
 } // end detail
 
 
+template<class ExecutionPolicy, class... Args>
+using has_bulk_async_free_function = typename detail::has_bulk_async_free_function_impl<ExecutionPolicy,Args...>::type;
+
+
 template<class ExecutionPolicy, class... Args,
          __AGENCY_REQUIRES(
-           detail::can_adl_bulk_async<ExecutionPolicy,Args...>::value
+           has_bulk_async_free_function<ExecutionPolicy,Args...>::value
          )>
 auto bulk_async(ExecutionPolicy&& policy, Args&&... args) ->
-  decltype(detail::bulk_async_adl_implementation(std::forward<ExecutionPolicy>(policy), std::forward<Args>(args)...))
+  decltype(detail::adl_bulk_async(std::forward<ExecutionPolicy>(policy), std::forward<Args>(args)...))
 {
-  return detail::bulk_async_adl_implementation(std::forward<ExecutionPolicy>(policy), std::forward<Args>(args)...);
+  return detail::adl_bulk_async(std::forward<ExecutionPolicy>(policy), std::forward<Args>(args)...);
 } // end bulk_async()
 
 
 template<class ExecutionPolicy, class... Args,
          __AGENCY_REQUIRES(
-           !detail::can_adl_bulk_async<ExecutionPolicy,Args...>::value
+           !has_bulk_async_free_function<ExecutionPolicy,Args...>::value
          )>
 auto bulk_async(ExecutionPolicy&& policy, Args&&... args) ->
-  decltype(detail::bulk_async_default_implementation(std::forward<ExecutionPolicy>(policy), std::forward<Args>(args)...))
+  decltype(detail::default_bulk_async(std::forward<ExecutionPolicy>(policy), std::forward<Args>(args)...))
 {
-  return detail::bulk_async_default_implementation(std::forward<ExecutionPolicy>(policy), std::forward<Args>(args)...);
+  return detail::default_bulk_async(std::forward<ExecutionPolicy>(policy), std::forward<Args>(args)...);
 } // end bulk_async()
 
 

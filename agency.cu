@@ -35,6 +35,7 @@
 #include "async_copy.hpp"
 #include "bulk_invoke.hpp"
 #include "bulk_async.hpp"
+#include "for_each.hpp"
 
 void init_host_data( int n, double * x )
 {
@@ -76,13 +77,11 @@ void check_results(int n, double correctvalue, double* x_d)
 {
   auto policy = annotate(agency::cuda::par, "check_results", cyan);
 
-  experimental::bulk_invoke(policy(n), [=] __device__ (agency::parallel_agent& self)
+  experimental::for_each(policy, x_d, x_d + n, [=] __host__ __device__ (double value)
   {
-    int i = self.index();
-
-    if(x_d[i] != correctvalue)
+    if(value != correctvalue)
     {
-      printf("ERROR at index = %d, expected = %f, actual: %f\n",i,correctvalue,x_d[i]);
+      printf("ERROR, expected = %f, actual: %f\n", correctvalue, value);
     }
   });
 }

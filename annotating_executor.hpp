@@ -4,6 +4,8 @@
 #include "async_copy.hpp"
 #include "bulk_async.hpp"
 #include "bulk_invoke.hpp"
+#include "for_each.hpp"
+#include "disabled_execution_policy.hpp"
 #include <agency/cuda.hpp>
 #include <string>
 
@@ -71,10 +73,14 @@ class annotator
     // define destructor to silence __host__ __device__ warnings
     inline ~annotator() = default;
 
-    // constructs a new annotator at one recursion level "below" this annotator
-    inline annotator descend() const
+    inline void descend()
     {
-      return annotator(name_, color_, depth_ + 1);
+      depth_++;
+    }
+
+    inline void ascend()
+    {
+      depth_--;
     }
 
     inline size_t depth() const
@@ -130,6 +136,7 @@ annotating_executor<Executor> annotate(const Executor& exec, const annotator& a)
 }
 
 
+// XXX it would probably be simpler if annotating_execution_policy just derived from ExecutionPolicy
 template<class ExecutionPolicy>
 class annotating_execution_policy :
   public agency::basic_execution_policy<
@@ -160,7 +167,7 @@ class annotating_execution_policy :
     /// \param policy An unannotated, base execution policy to annotate.
     /// \param name The name for the annotation.
     annotating_execution_policy(const base_execution_policy_type& policy, const std::string& name, const color& c)
-      : annotating_execution_policy(policy, name, c)
+      : annotating_execution_policy(policy, annotator(name, c))
     {}
 
     base_execution_policy_type base_execution_policy() const
@@ -179,29 +186,33 @@ class annotating_execution_policy :
     class annotated_scope
     {
       private:
-        ::annotator annotator_;
-        ExecutionPolicy policy_;
+        annotating_execution_policy& policy_;
         Token token_;
 
       public:
         annotated_scope(annotating_execution_policy& annotated_policy, Token token)
-          : annotator_(annotated_policy.annotator()), policy_(annotated_policy.base_execution_policy()), token_(token)
+          : policy_(annotated_policy), token_(token)
         {
-          // invoke the annotator
-          annotator_(policy_, token_);
+          // invoke the policy's annotator on the base policy
+          policy_.annotator()(policy_.base_execution_policy(), token_);
+
+          // "descend" the annotator into this scope
+          policy_.annotator().descend();
         }
 
         ~annotated_scope()
         {
-          // invoke the annotator's .after() method
-          annotator_.after(policy_, token_);
+          // "ascend" the annotator out of this scope
+          policy_.annotator().ascend();
+
+          // invoke the annotator's .after() method on the base policy
+          policy_.annotator().after(policy_.base_execution_policy(), token_);
         }
 
         // this returns an ExecutionPolicy to use "within" this scope
-        auto policy() const ->
-          decltype(policy_.on(annotate(policy_.executor(), annotator_.descend())))
+        annotating_execution_policy& policy()
         {
-          return policy_.on(annotate(policy_.executor(), annotator_.descend()));
+          return policy_;
         }
     };
 
@@ -229,7 +240,10 @@ annotating_execution_policy<ExecutionPolicy> annotate(const ExecutionPolicy& pol
 
   std::cout << announcement << std::endl;
 
-  return annotating_execution_policy<ExecutionPolicy>(policy, ann.descend());
+  // "descend" the annotator before returning a policy
+  ann.descend();
+
+  return annotating_execution_policy<ExecutionPolicy>(policy, ann);
 }
 
 
@@ -240,8 +254,11 @@ auto async_copy(annotating_execution_policy<ExecutionPolicy>& policy, Args&&... 
   // annotate this scope
   auto scope = policy.annotate_scope(control_structure::async_copy);
 
+  // when recursing, prefer ExecutionPolicy's async_copy overload
+  auto& recurse_policy = prefer_overload<ExecutionPolicy,control_structure::async_copy>(scope.policy());
+
   // call async_copy() with the annotated scope's policy
-  return experimental::async_copy(scope.policy(), std::forward<Args>(args)...);
+  return experimental::async_copy(recurse_policy, std::forward<Args>(args)...);
 }
 
 
@@ -252,8 +269,10 @@ auto bulk_async(annotating_execution_policy<ExecutionPolicy>& policy, Function f
   // annotate this scope
   auto scope = policy.annotate_scope(control_structure::bulk_async);
 
-  // call bulk_async() with the annotated scope's policy
-  return experimental::bulk_async(scope.policy(), f, std::forward<Args>(args)...);
+  // when recursing, prefer ExecutionPolicy's bulk_async overload
+  auto& recurse_policy = prefer_overload<ExecutionPolicy,control_structure::bulk_async>(scope.policy());
+
+  return experimental::bulk_async(recurse_policy, f, std::forward<Args>(args)...);
 }
 
 
@@ -272,8 +291,10 @@ auto bulk_invoke(annotating_execution_policy<ExecutionPolicy>& policy, Function 
   // annotate this scope
   auto scope = policy.annotate_scope(control_structure::bulk_invoke);
 
-  // call bulk_invoke() with the annotated scope's policy
-  return experimental::bulk_invoke(scope.policy(), f, std::forward<Args>(args)...);
+  // when recursing, prefer ExecutionPolicy's bulk_invoke overload
+  auto& recurse_policy = prefer_overload<ExecutionPolicy,control_structure::bulk_invoke>(scope.policy());
+
+  return experimental::bulk_invoke(recurse_policy, f, std::forward<Args>(args)...);
 }
 
 
@@ -282,5 +303,25 @@ auto bulk_invoke(annotating_execution_policy<ExecutionPolicy>&& policy, Function
   decltype(agency::bulk_invoke(policy.base_execution_policy(), f, std::forward<Args>(args)...))
 {
   return ::bulk_invoke(policy, f, std::forward<Args>(args)...);
+}
+
+
+template<class ExecutionPolicy, class Iterator, class Function>
+void for_each(annotating_execution_policy<ExecutionPolicy>& policy, Iterator first, Iterator last, Function f)
+{
+  // annotate this scope
+  auto scope = policy.annotate_scope(control_structure::for_each);
+
+  // when recursing, prefer ExecutionPolicy's for_each overload
+  auto& recurse_policy = prefer_overload<ExecutionPolicy,control_structure::for_each>(scope.policy());
+
+  return experimental::for_each(recurse_policy, first, last, f);
+}
+
+
+template<class ExecutionPolicy, class Iterator, class Function>
+void for_each(annotating_execution_policy<ExecutionPolicy>&& policy, Iterator first, Iterator last, Function f)
+{
+  return ::for_each(policy, first, last, f);
 }
 
